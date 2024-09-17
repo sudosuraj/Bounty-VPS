@@ -1,5 +1,5 @@
 <h1 align="center">
-<a href="https://cooltext.com"><img src="Bounty VPS.jpg" width="400" alt="Bounty-VPS" />
+<a href="https://cooltext.com"><img src="Bounty VPS.jpg" width="500" alt="Bounty-VPS" />
 </h1>
 <h4 align="center">Bug Bounty Easy Vps Setup</h4>
 <p align="center">
