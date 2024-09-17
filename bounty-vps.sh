@@ -44,62 +44,62 @@ GOSETUP(){
 
 GOTOOLS() {
     echo -e ${OR}"Go Tools Setup...";${NL}
-    go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest > /dev/null 2>&1
-    go install -v github.com/tomnomnom/anew@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/assetfinder@latest > /dev/null 2>&1
-    go install github.com/projectdiscovery/katana/cmd/katana@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/waybackurls@latest > /dev/null 2>&1
-    go install github.com/hakluke/hakrawler@latest > /dev/null 2>&1
-    go install github.com/d3mondev/puredns/v2@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest > /dev/null 2>&1
-    go install github.com/lc/gau/v2/cmd/gau@latest > /dev/null 2>&1
-    go install github.com/utkusen/socialhunter@latest > /dev/null 2>&1
-    go install -v github.com/PentestPad/subzy@latest > /dev/null 2>&1
-    go install github.com/003random/getJS/v2@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest > /dev/null 2>&1
-    go install github.com/gwen001/github-subdomains@latest > /dev/null 2>&1
-    go install -v github.com/owasp-amass/amass/v4/...@master > /dev/null 2>&1
-    go install github.com/cgboal/sonarsearch/cmd/crobat@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/chaos-client/cmd/chaos@latest > /dev/null 2>&1
-    go install github.com/Josue87/gotator@latest > /dev/null 2>&1
-    go install github.com/glebarez/cero@latest > /dev/null 2>&1
-    go install -v github.com/dwisiswant0/galer@latest > /dev/null 2>&1 
-    go install -v github.com/c3l3si4n/quickcert@HEAD > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest > /dev/null 2>&1
-    go install github.com/sensepost/gowitness@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/httprobe@latest > /dev/null 2>&1
-    go install github.com/jaeles-project/gospider@latest > /dev/null 2>&1
-    go install github.com/mrco24/parameters@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/gf@latest > /dev/null 2>&1 
-    go install github.com/mrco24/otx-url@latest > /dev/null 2>&1
-    go install github.com/ffuf/ffuf@latest > /dev/null 2>&1 
-    go install github.com/OJ/gobuster/v3@latest > /dev/null 2>&1 
-    go install github.com/mrco24/mrco24-lfi@latest > /dev/null 2>&1 
-    go install github.com/mrco24/open-redirect@latest > /dev/null 2>&1 
-    go install -v github.com/projectdiscovery/interactsh/cmd/interactsh-client > /dev/null 2>&1 
-    go install -v github.com/hahwul/dalfox/v2@latest > /dev/null 2>&1
-    go install github.com/Emoe/kxss@late > /dev/null 2>&1 
-    go install github.com/KathanP19/Gxss@latest > /dev/null 2>&1 
-    go install github.com/ethicalhackingplayground/bxss@latest > /dev/null 2>&1
-    go install github.com/ferreiraklet/Jeeves@latest > /dev/null 2>&1
-    go install github.com/mrco24/time-sql@latest > /dev/null 2>&1 
-    go install github.com/mrco24/mrco24-error-sql@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest > /dev/null 2>&1
-    go install -v github.com/xm1k3/cent@latest > /dev/null 2>&1 
-    go install github.com/MrEmpy/mantra@latest > /dev/null 2>&1
-    go install -v github.com/projectdiscovery/notify/cmd/notify@latest > /dev/null 2>&1
-    go install github.com/mrco24/tok@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/hacks/anti-burl@latest > /dev/null 2>&1 
-    go install github.com/tomnomnom/unfurl@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/fff@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/gron@latest > /dev/null 2>&1
-    go install github.com/tomnomnom/qsreplace@latest > /dev/null 2>&1 
-    go install github.com/dwisiswant0/cf-check@latest > /dev/null 2>&1 
+    go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest 
+    go install -v github.com/tomnomnom/anew@latest 
+    go install github.com/tomnomnom/assetfinder@latest
+    go install github.com/projectdiscovery/katana/cmd/katana@latest 
+    go install github.com/tomnomnom/waybackurls@latest 
+    go install github.com/hakluke/hakrawler@latest 
+    go install github.com/d3mondev/puredns/v2@latest 
+    go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest 
+    go install github.com/lc/gau/v2/cmd/gau@latest 
+    go install github.com/utkusen/socialhunter@latest 
+    go install -v github.com/PentestPad/subzy@latest 
+    go install github.com/003random/getJS/v2@latest 
+    go install -v github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest 
+    go install github.com/gwen001/github-subdomains@latest 
+    go install -v github.com/owasp-amass/amass/v4/...@master 
+    go install github.com/cgboal/sonarsearch/cmd/crobat@latest 
+    go install -v github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest 
+    go install -v github.com/projectdiscovery/chaos-client/cmd/chaos@latest 
+    go install github.com/Josue87/gotator@latest 
+    go install github.com/glebarez/cero@latest 
+    go install -v github.com/dwisiswant0/galer@latest  
+    go install -v github.com/c3l3si4n/quickcert@HEAD 
+    go install -v github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest 
+    go install github.com/sensepost/gowitness@latest 
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest 
+    go install github.com/tomnomnom/httprobe@latest 
+    go install github.com/jaeles-project/gospider@latest 
+    go install github.com/mrco24/parameters@latest 
+    go install github.com/tomnomnom/gf@latest  
+    go install github.com/mrco24/otx-url@latest 
+    go install github.com/ffuf/ffuf@latest  
+    go install github.com/OJ/gobuster/v3@latest  
+    go install github.com/mrco24/mrco24-lfi@latest  
+    go install github.com/mrco24/open-redirect@latest  
+    go install -v github.com/projectdiscovery/interactsh/cmd/interactsh-client  
+    go install -v github.com/hahwul/dalfox/v2@latest 
+    go install github.com/Emoe/kxss@late  
+    go install github.com/KathanP19/Gxss@latest  
+    go install github.com/ethicalhackingplayground/bxss@latest 
+    go install github.com/ferreiraklet/Jeeves@latest 
+    go install github.com/mrco24/time-sql@latest  
+    go install github.com/mrco24/mrco24-error-sql@latest 
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest 
+    go install -v github.com/xm1k3/cent@latest  
+    go install github.com/MrEmpy/mantra@latest 
+    go install -v github.com/projectdiscovery/notify/cmd/notify@latest 
+    go install github.com/mrco24/tok@latest 
+    go install github.com/tomnomnom/hacks/anti-burl@latest  
+    go install github.com/tomnomnom/unfurl@latest 
+    go install github.com/tomnomnom/fff@latest 
+    go install github.com/tomnomnom/gron@latest 
+    go install github.com/tomnomnom/qsreplace@latest  
+    go install github.com/dwisiswant0/cf-check@latest  
     
-    echo -e {GREEN}"Go Tools Done...";
-    echo -e {RED}"Installed Tools: subfinder, anew, assetfinder, katana, waybackurls, hakrawler, puredns, dnsx, gau, socialhunter, subzy, getJS, shuffledns, github-subdomains, amass, crobat, mapcidr, chaos, gotator, cero, galer, quickcert, gowitness, httpx, httprobe, gospider, parameters, gf, otx-url, ffuf, gobuster, mrco24-lfi, open-redirect, interactsh-client, dalfox, kxss, Gxss, bxss, Jeeves, time-sql, error-sql, nuclei, cent, mantra, notify, tok, anti-burl, unfurl, fff, gron, qsreplace, cf-check.";
+    echo -e ${GR}"Go Tools Done..."${NL};
+    echo -e ${BL}"Installed Tools: subfinder, anew, assetfinder, katana, waybackurls, hakrawler, puredns, dnsx, gau, socialhunter, subzy, getJS, shuffledns, github-subdomains, amass, crobat, mapcidr, chaos, gotator, cero, galer, quickcert, gowitness, httpx, httprobe, gospider, parameters, gf, otx-url, ffuf, gobuster, mrco24-lfi, open-redirect, interactsh-client, dalfox, kxss, Gxss, bxss, Jeeves, time-sql, error-sql, nuclei, cent, mantra, notify, tok, anti-burl, unfurl, fff, gron, qsreplace, cf-check."${NL};
 }
 
 PYTHONSETUP(){
