@@ -13,3 +13,8 @@
       <img src="https://img.shields.io/twitter/follow/sudosuraj?style=social">
   </a>
 </p>
+
+## Installation
+```
+apt-get update -y && apt-get install git -y && cd /tmp && git clone https://github.com/sudosuraj/Bounty-VPS.git && cd Bounty-VPS && chmod +x bounty-vps.sh && sudo bash ./bounty-vps.sh
+```
