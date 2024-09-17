@@ -35,7 +35,7 @@ GOSETUP(){
     	GOROOT=/usr/local/go
     	PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 	fi' >> ~/.bashrc
-	. ~/.bashrc
+	. ~/.bashrc & source ~/.bashrc
 	echo -e ${GR}Step 3: Verify the installation...${NL}
 	which go
 	go version
@@ -132,7 +132,7 @@ PYTHONTOOLS(){
 	sudo mkdir -p /opt/linkfinder
 	sudo cp linkfinder.py /opt/linkfinder/linkfinder.py
 	sudo echo 'alias linkfinder="python3 /opt/linkfinder/linkfinder.py"'>>~/.bashrc
-	. ~/.bashrc
+	. ~/.bashrc & source ~/.bashrc
 }
 KALI-TOOLS(){
 	echo -e "Adding" ${GR}Kali Linux${NL} "Repository"
@@ -151,5 +151,9 @@ KALI-TOOLS(){
 }
 
 GOSETUP && GOTOOLS && PYTHONSETUP && PYTHONTOOLS && KALI-TOOLS;
+. ~/.bashrc & source ~/.bashrc
 
-echo -e "Congrats! Your VPS is ready to H4ck Th3 Pl4n3t\nHit a follow button @sudosuraj on LinkedIn, Github, Instagram\nCreated With ❤️ in India."
+echo -e "\n"
+echo -e "\n"
+
+echo -e "Congrats! Your VPS is ready to H4ck Th3 Pl4n3t\nHit a follow button ${GR}@sudosuraj${NL} on LinkedIn, Github, Instagram\nCreated With ❤️ in India."
