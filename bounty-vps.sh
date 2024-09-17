@@ -21,7 +21,7 @@ echo -e "This script is made by" ${GR}sudosuraj${NL}
 
 GOSETUP(){
 	echo -e {OR}"Go lang Setup...";${NL}
-	apt install unzip
+	sudo apt install unzip
 	echo  -e  ${GR}Step 1: Downloading Go Package...${NL}
 	cd /tmp && wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
 	echo  -e  ${GR}Step 2:Setting up go environment... ${NL}
