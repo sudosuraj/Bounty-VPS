@@ -16,5 +16,5 @@
 
 ## Installation
 ```
-apt-get update -y && apt-get install git -y && cd /tmp && git clone https://github.com/sudosuraj/Bounty-VPS.git && cd Bounty-VPS && chmod +x bounty-vps.sh && sudo bash ./bounty-vps.sh
+sudo apt-get update -y && sudo apt-get install git -y && cd /tmp && git clone https://github.com/sudosuraj/Bounty-VPS.git && cd Bounty-VPS && chmod +x bounty-vps.sh && sudo bash ./bounty-vps.sh
 ```
