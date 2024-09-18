@@ -96,7 +96,8 @@ GOTOOLS() {
     go install github.com/tomnomnom/fff@latest 
     go install github.com/tomnomnom/gron@latest 
     go install github.com/tomnomnom/qsreplace@latest  
-    go install github.com/dwisiswant0/cf-check@latest  
+    go install github.com/dwisiswant0/cf-check@latest
+    go install  github.com/Emoe/kxss@latest
     
     echo -e ${GR}"Go Tools Done..."${NL};
     echo -e ${BL}"Installed Tools: subfinder, anew, assetfinder, katana, waybackurls, hakrawler, puredns, dnsx, gau, socialhunter, subzy, getJS, shuffledns, github-subdomains, amass, crobat, mapcidr, chaos, gotator, cero, galer, quickcert, gowitness, httpx, httprobe, gospider, parameters, gf, otx-url, ffuf, gobuster, mrco24-lfi, open-redirect, interactsh-client, dalfox, kxss, Gxss, bxss, Jeeves, time-sql, error-sql, nuclei, cent, mantra, notify, tok, anti-burl, unfurl, fff, gron, qsreplace, cf-check."${NL};
