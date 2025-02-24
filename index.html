@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bounty VPS - Bug Bounty Easy VPS Setup</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .header-img {
+      display: block;
+      margin: 0 auto;
+      max-width: 500px;
+      width: 100%;
+    }
+    .badge-img {
+      margin: 5px;
+    }
+    pre {
+      background-color: #e9ecef;
+      padding: 15px;
+      border-radius: 5px;
+    }
+    hr {
+      margin: 40px 0;
+    }
+    h2, h3, h4, h5 {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Section -->
+    <div class="text-center my-4">
+      <a href="https://cooltext.com">
+        <img src="Bounty VPS.jpg" alt="Bounty-VPS" class="header-img" />
+      </a>
+      <h4>Bug Bounty Easy VPS Setup</h4>
+      <p>
+        <a href="https://github.com/sudosuraj/Bounty-VPS" class="badge-img">
+          <img src="https://img.shields.io/badge/Project-Bounty--VPS-green" alt="Project Badge" />
+        </a>
+        <a href="https://github.com/sudosuraj/Bounty-VPS" class="badge-img">
+          <img src="https://img.shields.io/static/v1?label=Update&message=V1.0&color=green" alt="Update Badge" />
+        </a>
+        <a href="https://twitter.com/sudosuraj" class="badge-img">
+          <img src="https://img.shields.io/twitter/follow/sudosuraj?style=social" alt="Twitter Follow" />
+        </a>
+      </p>
+    </div>
+
+    <!-- About Section -->
+    <div>
+      <h2>About</h2>
+      <p>
+        Bug Bounty Setup Tools On Fresh VPS. This script automatically installs top bug bounty tools and sets up the environment on a newly installed VPS or Linux Operating System.
+      </p>
+      <h5>This scripts:</h5>
+      <ul>
+        <li>Download Setup Go language</li>
+        <li>Setup Python3 Env for pentesting</li>
+        <li>Download most of the tools used in penetration testing and bug bounty</li>
+      </ul>
+    </div>
+
+    <!-- Installation Section -->
+    <div>
+      <h2>Installation</h2>
+      <pre><code>sudo apt-get update -y && sudo apt-get install git -y && cd /tmp && git clone https://github.com/sudosuraj/Bounty-VPS.git && cd Bounty-VPS && chmod +x bounty-vps.sh && sudo bash ./bounty-vps.sh</code></pre>
+    </div>
+
+    <!-- Tools List Section -->
+    <div>
+      <h2>🛠️ Tools List</h2>
+      <p>These tools are primarily for reconnaissance, enumeration, and vulnerability scanning.</p>
+      
+      <h3>Reconnaissance &amp; Enumeration</h3>
+      <ul>
+        <li><strong>subfinder</strong> - Subdomain discovery</li>
+        <li><strong>assetfinder</strong> - Finds related assets (domains)</li>
+        <li><strong>katana</strong> - Web crawler</li>
+        <li><strong>gau</strong> - Fetches archived URLs</li>
+        <li><strong>amass</strong> - In-depth DNS enumeration</li>
+        <li><strong>crobat</strong> - Subdomain enumeration</li>
+        <li><strong>chaos</strong> - Enumerates subdomains from ProjectDiscovery’s Chaos dataset</li>
+        <li><strong>gotator</strong> - Permutation-based subdomain generator</li>
+        <li><strong>cf-check</strong> - Cloudflare IP checker</li>
+        <li><strong>gowitness</strong> - Web screenshot tool</li>
+        <li><strong>httpx</strong> - HTTP probing</li>
+        <li><strong>httprobe</strong> - Probes for HTTP servers</li>
+        <li><strong>gospider</strong> - Web spider</li>
+        <li><strong>subzy</strong> - Subdomain takeover scanner</li>
+      </ul>
+
+      <h3>Web &amp; Network Scanning</h3>
+      <ul>
+        <li><strong>dnsx</strong> - DNS resolver and probe</li>
+        <li><strong>puredns</strong> - Fast recursive DNS resolver</li>
+        <li><strong>shuffledns</strong> - DNS enumeration using bruteforce and wordlist</li>
+        <li><strong>ffuf</strong> - Fast web fuzzer</li>
+        <li><strong>gobuster</strong> - Directory, DNS, and VHost busting tool</li>
+        <li><strong>nuclei</strong> - Vulnerability scanner</li>
+        <li><strong>interactsh-client</strong> - Interaction-based payloads</li>
+        <li><strong>httpx</strong> - HTTP probing</li>
+      </ul>
+
+      <h3>OSINT &amp; Data Gathering</h3>
+      <ul>
+        <li><strong>waybackurls</strong> - Fetch URLs from the Wayback Machine</li>
+        <li><strong>socialhunter</strong> - Social media data finder</li>
+        <li><strong>github-subdomains</strong> - Finds subdomains in GitHub repositories</li>
+        <li><strong>bxss</strong> - Blind XSS payload generator</li>
+        <li><strong>Jeeves</strong> - Enumeration tool</li>
+        <li><strong>tok</strong> - Enumeration tool</li>
+      </ul>
+
+      <h3>Scripting &amp; Miscellaneous Utilities</h3>
+      <ul>
+        <li><strong>anew</strong> - Appends unique lines to a file</li>
+        <li><strong>qsreplace</strong> - Replaces query string values</li>
+        <li><strong>gron</strong> - Converts JSON into greppable data</li>
+        <li><strong>fff</strong> - Fast file finder</li>
+        <li><strong>unfurl</strong> - Extracts URLs from input</li>
+        <li><strong>mapcidr</strong> - Subnetting tool</li>
+        <li><strong>cent</strong> - Nuclei templates manager</li>
+        <li><strong>notify</strong> - Notification manager for vulnerabilities</li>
+      </ul>
+
+      <h3>Injection &amp; Security Testing</h3>
+      <ul>
+        <li><strong>dalfox</strong> - XSS scanner</li>
+        <li><strong>kxss</strong> - Finds potential XSS points</li>
+        <li><strong>Gxss</strong> - XSS payload generator</li>
+        <li><strong>error-sql</strong> - SQL injection error-based tester</li>
+        <li><strong>time-sql</strong> - SQL injection time-based tester</li>
+      </ul>
+      <hr />
+
+      <!-- Python Tools Section -->
+      <h2>🐍 Python Tools</h2>
+      <p>These tools are primarily for web application testing and OSINT.</p>
+      
+      <h3>Web &amp; Application Testing</h3>
+      <ul>
+        <li><strong>arjun</strong> - HTTP parameter discovery tool</li>
+        <li><strong>GitHacker</strong> - Finds secrets in Git repositories</li>
+        <li><strong>SecretFinder</strong> - Finds sensitive keys in JavaScript files</li>
+        <li><strong>LinkFinder</strong> - Extracts URLs from JavaScript files</li>
+        <li><strong>uro</strong> - URL parser</li>
+        <li><strong>urless</strong> - URL manipulation tool</li>
+      </ul>
+
+      <h3>OSINT &amp; Data Extraction</h3>
+      <ul>
+        <li><strong>crtsh</strong> - Certificate transparency log searcher</li>
+        <li><strong>jsbeautifier</strong> - Beautifies JavaScript code</li>
+        <li><strong>lxml</strong> - XML and HTML parsing library</li>
+      </ul>
+      <hr />
+
+      <!-- Kali Linux Tools Section -->
+      <h2>🧰 Kali Linux Tools</h2>
+      <p>These tools cover a broad spectrum of penetration testing, including network scanning, web application assessment, and wireless security.</p>
+      
+      <h3>Network Scanning</h3>
+      <ul>
+        <li><strong>nmap</strong> - Network scanner</li>
+        <li><strong>masscan</strong> - Fast port scanner</li>
+        <li><strong>p0f</strong> - Passive OS fingerprinting</li>
+        <li><strong>dnsenum</strong> - DNS enumeration tool</li>
+        <li><strong>dnsmap</strong> - DNS map generator</li>
+        <li><strong>dnstracer</strong> - Traces DNS path</li>
+        <li><strong>wireshark</strong> - Network packet analyzer</li>
+      </ul>
+
+      <h3>Web Application Security</h3>
+      <ul>
+        <li><strong>sqlmap</strong> - SQL injection tool</li>
+        <li><strong>wpscan</strong> - WordPress vulnerability scanner</li>
+        <li><strong>arachni</strong> - Web application vulnerability scanner</li>
+        <li><strong>skipfish</strong> - Web application security scanner</li>
+        <li><strong>wfuzz</strong> - Web fuzzer</li>
+        <li><strong>w3af</strong> - Web application attack and audit framework</li>
+      </ul>
+
+      <h3>Exploitation Tools</h3>
+      <ul>
+        <li><strong>metasploit</strong> - Exploitation framework</li>
+        <li><strong>beef-xss</strong> - Browser exploitation framework</li>
+        <li><strong>backdoor-factory</strong> - Injects backdoors into binaries</li>
+        <li><strong>weevely</strong> - Web shell generator</li>
+      </ul>
+
+      <h3>Password Cracking</h3>
+      <ul>
+        <li><strong>hash-identifier</strong> - Identifies hash types</li>
+        <li><strong>john</strong> - Password cracker</li>
+        <li><strong>rainbowcrack</strong> - Uses rainbow tables for password cracking</li>
+        <li><strong>patator</strong> - Multi-purpose brute-forcer</li>
+      </ul>
+
+      <h3>Wireless Security</h3>
+      <ul>
+        <li><strong>aircrack-ng</strong> - Wireless security auditing</li>
+        <li><strong>kismet</strong> - Wireless network detector</li>
+        <li><strong>pixiewps</strong> - Offline WPS attack tool</li>
+        <li><strong>reaver</strong> - WPA attack tool</li>
+      </ul>
+
+      <h3>OSINT &amp; Reconnaissance</h3>
+      <ul>
+        <li><strong>theharvester</strong> - Collects emails, subdomains, hosts, and more</li>
+        <li><strong>recon-ng</strong> - Reconnaissance framework</li>
+        <li><strong>metagoofil</strong> - Collects public documents from Google</li>
+        <li><strong>fierce</strong> - DNS reconnaissance tool</li>
+        <li><strong>firewalk</strong> - Traces firewall rules</li>
+      </ul>
+
+      <!-- Final Note -->
+      <h2>Final Note</h2>
+      <p>
+        Once the script completes, your VPS will be fully set up for penetration testing and reconnaissance, with a wide range of tools installed.
+      </p>
+    </div>
+  </div>
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
