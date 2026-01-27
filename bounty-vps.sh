@@ -412,8 +412,10 @@ install_python_tools() {
     
     # Install specific GitHub tools
     install_from_github "0xRyuk/crtsh" "crtsh" "/opt/crtsh"
-    install_from_github "m4ll0k/SecretFinder" "secretfinder" "/opt/secretfinder"
-    install_from_github "GerbenJavado/LinkFinder" "linkfinder" "/opt/linkfinder"
+    install_from_github "m4ll0k/SecretFinder" "secretfinder" "$INSTALL_DIR/python/secretfinder"
+    install_from_github "GerbenJavado/LinkFinder" "linkfinder" "$INSTALL_DIR/python/linkfinder"
+    install_from_github "WangYihang/GitHacker" "githacker" "$INSTALL_DIR/python/GitHacker"
+
     
     log_success "Python tools: $installed_count installed, $failed_count failed"
 }
