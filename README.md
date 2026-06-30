@@ -25,6 +25,8 @@
 ```
 sudo apt-get update -y && sudo apt-get install git -y && cd /tmp && git clone https://github.com/sudosuraj/Bounty-VPS.git && cd Bounty-VPS && chmod +x bounty-vps.sh && bash ./bounty-vps.sh
 ```
+You can tune concurrency with e.g. MAX_PARALLEL=8 ./bounty-vps-setup.sh if your VPS has the cores/bandwidth for it.
+
 # 🛠️ Tools List
 
 These tools are primarily for reconnaissance, enumeration, and vulnerability scanning.
