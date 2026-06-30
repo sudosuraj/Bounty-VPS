@@ -2,12 +2,18 @@
 
 # ==================== CONFIGURATION ====================
 SCRIPT_NAME="bounty-vps-setup"
-SCRIPT_VERSION="2.3"
+SCRIPT_VERSION="2.4"
 LOG_FILE="/tmp/$SCRIPT_NAME-$(date +%Y%m%d-%H%M%S).log"
 INSTALL_DIR="$HOME/tools"
 WORDLISTS_DIR="$HOME/wordlists"
 GO_VERSION="1.22.4"
 GO_INSTALL_DIR="/usr/local/go"
+
+# Max number of concurrent background jobs for parallel sections
+# (go installs, python github tools, wordlist downloads).
+# Override with: MAX_PARALLEL=N ./bounty-vps-setup.sh
+MAX_PARALLEL="${MAX_PARALLEL:-$(nproc 2>/dev/null || echo 4)}"
+[ "$MAX_PARALLEL" -lt 2 ] 2>/dev/null && MAX_PARALLEL=4
 
 # ==================== COLOR SETUP ====================
 OR='\e[38;5;202m'
@@ -20,18 +26,34 @@ CYAN='\e[36m'
 YELLOW='\e[33m'
 
 # ==================== LOGGING FUNCTIONS ====================
+# NOTE: log_message uses flock around the tee/append so concurrent background
+# jobs writing to the same LOG_FILE don't interleave/corrupt each other.
 log_message() {
     local level=$1
     local message=$2
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "${timestamp} [$level] ${message}" | tee -a "$LOG_FILE"
+    (
+        flock -w 5 200
+        echo -e "${timestamp} [$level] ${message}" | tee -a "$LOG_FILE" >/dev/null
+        echo -e "${timestamp} [$level] ${message}"
+    ) 200>>"$LOG_FILE.lock"
 }
 
 log_info()    { log_message "INFO"    "${CYAN}$1${NL}"; }
 log_success() { log_message "SUCCESS" "${GR}$1${NL}"; }
 log_warning() { log_message "WARNING" "${YELLOW}$1${NL}"; }
 log_error()   { log_message "ERROR"   "${RED}$1${NL}"; }
+
+# ==================== JOB POOL HELPER ====================
+# Simple bounded-parallelism helper: call `pool_wait_for_slot` before
+# backgrounding a new job to block until fewer than MAX_PARALLEL jobs
+# of this script are running. Works on bash 4.3+ (uses wait -n).
+pool_wait_for_slot() {
+    while [ "$(jobs -rp | wc -l)" -ge "$MAX_PARALLEL" ]; do
+        wait -n 2>/dev/null || sleep 0.2
+    done
+}
 
 # ==================== UTILITY FUNCTIONS ====================
 command_exists() {
@@ -68,6 +90,11 @@ check_sudo() {
         log_error "User does not have sudo privileges"
         exit 1
     fi
+
+    # Keep sudo alive in the background for the duration of the script so
+    # long parallel sections don't hit a sudo timeout halfway through.
+    ( while true; do sudo -n true; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
+    SUDO_KEEPALIVE_PID=$!
 }
 
 check_internet() {
@@ -90,14 +117,19 @@ get_shell_rc() {
 
 # Append a line to shell_rc only if an equivalent line isn't already present.
 # Uses fixed-string matching so special characters (like $ in PATH exports) are safe.
+# flock-protected since multiple parallel installers may call this concurrently
+# (e.g. github tool installers each adding an alias line).
 append_once() {
     local file=$1
     local line=$2
-    if ! grep -qF -- "$line" "$file" 2>/dev/null; then
-        echo "$line" >> "$file"
-        return 0
-    fi
-    return 1
+    (
+        flock -w 5 201
+        if ! grep -qF -- "$line" "$file" 2>/dev/null; then
+            echo "$line" >> "$file"
+            exit 0
+        fi
+        exit 1
+    ) 201>>"$file.lock"
 }
 
 setup_directories() {
@@ -136,10 +168,6 @@ setup_go_environment() {
     local detected_goroot=""
 
     if command_exists go; then
-        # Make sure the go binary actually works before trusting it — a partial
-        # or broken install (e.g. binary present but GOROOT contents missing)
-        # is what typically causes "GOROOT verification failed" style errors
-        # later when installing tools.
         if go version >/dev/null 2>&1; then
             detected_goroot=$(go env GOROOT 2>/dev/null)
             local current_go_version
@@ -152,7 +180,6 @@ setup_go_environment() {
                 log_warning "Different Go version found ($current_go_version). Continuing with existing version."
             fi
 
-            # Sanity check: does the reported GOROOT actually exist on disk?
             if [ -z "$detected_goroot" ] || [ ! -d "$detected_goroot" ] || [ ! -x "$detected_goroot/bin/go" ]; then
                 log_warning "Detected GOROOT ('$detected_goroot') looks broken or missing — will reinstall Go"
                 detected_goroot=""
@@ -175,9 +202,6 @@ setup_go_environment() {
             fi
         fi
 
-        # Wipe any stale/broken install at our target path before extracting,
-        # otherwise leftover files from a previous failed run can produce a
-        # Frankenstein install with a mismatched GOROOT.
         sudo rm -rf "$GO_INSTALL_DIR"
 
         if ! sudo tar -C /usr/local -xzf "$go_archive"; then
@@ -190,9 +214,6 @@ setup_go_environment() {
         detected_goroot="$GO_INSTALL_DIR"
     fi
 
-    # From here on, GO_INSTALL_DIR always reflects the GOROOT we're actually
-    # going to use — whether that's a pre-existing install we validated, or
-    # the one we just installed fresh.
     GO_INSTALL_DIR="$detected_goroot"
 
     local go_env
@@ -209,14 +230,10 @@ export PATH=\"\$PATH:\$GOROOT/bin:\$GOBIN\"
     touch "$shell_rc"
 
     if grep -q "# Go Environment" "$shell_rc" 2>/dev/null; then
-        # A Go env block already exists. If GOROOT changed (e.g. we detected a
-        # different install path than last time), replace the whole block
-        # instead of appending a second, conflicting one.
         if grep -qF "GOROOT=\"$GO_INSTALL_DIR\"" "$shell_rc" 2>/dev/null; then
             log_info "Go environment already correctly configured in $shell_rc"
         else
             log_warning "Go environment block in $shell_rc is stale — refreshing it"
-            # Remove the old block (from the marker comment through the PATH line)
             sed -i '/# Go Environment/,/^export PATH="\$PATH:\$GOROOT\/bin:\$GOBIN"$/d' "$shell_rc"
             echo "$go_env" >> "$shell_rc"
             log_success "Refreshed Go environment in $shell_rc"
@@ -234,8 +251,6 @@ export PATH=\"\$PATH:\$GOROOT/bin:\$GOBIN\"
     mkdir -p "$GOPATH"/{src,bin,pkg}
 
     if command_exists go; then
-        # Final sanity check: does `go env GOROOT` agree with what we exported?
-        # If not (e.g. a different go binary earlier in PATH), trust go itself.
         local verify_goroot
         verify_goroot=$(go env GOROOT 2>/dev/null)
         if [ -n "$verify_goroot" ] && [ "$verify_goroot" != "$GOROOT" ]; then
@@ -250,21 +265,23 @@ export PATH=\"\$PATH:\$GOROOT/bin:\$GOBIN\"
     fi
 }
 
-# ==================== GO TOOLS ====================
-install_go_tool() {
+# ==================== GO TOOLS (PARALLEL) ====================
+# Runs each `go install` as its own background job, capped at MAX_PARALLEL
+# concurrent builds. Each job writes its pass/fail result to a small status
+# file under a temp dir so the parent can tally results after `wait`.
+install_go_tool_job() {
     local tool_name=$1
     local install_cmd=$2
-
-    log_info "Checking: $tool_name"
+    local status_dir=$3
 
     if command_exists "$tool_name" || [ -f "$GOBIN/$tool_name" ]; then
         log_info "$tool_name already installed"
+        echo "skip" > "$status_dir/$tool_name"
         return 0
     fi
 
     log_info "Installing $tool_name..."
 
-    # Explicitly carry Go env into the subshell — don't trust inherited PATH alone
     local err_out
     err_out=$(env GOROOT="$GOROOT" GOPATH="$GOPATH" GOBIN="$GOBIN" \
         PATH="$PATH:$GOROOT/bin:$GOBIN" \
@@ -274,42 +291,42 @@ install_go_tool() {
     if [ $exit_code -ne 0 ]; then
         log_error "Failed to install $tool_name"
         echo "$err_out" >> "$LOG_FILE"
-        # Surface first meaningful error line to terminal
         echo "$err_out" | grep -E "^(go:|error:|#|cannot|dial|timeout|no required)" | head -3 | \
             while IFS= read -r line; do log_warning "  ↳ $line"; done
+        echo "fail" > "$status_dir/$tool_name"
         return 1
     fi
 
     if command_exists "$tool_name"; then
         log_success "Installed $tool_name"
+        echo "ok" > "$status_dir/$tool_name"
         return 0
     elif [ -f "$GOBIN/$tool_name" ]; then
         sudo ln -sf "$GOBIN/$tool_name" "/usr/local/bin/$tool_name" 2>/dev/null
         log_success "Installed $tool_name (linked from GOBIN)"
+        echo "ok" > "$status_dir/$tool_name"
         return 0
     fi
 
     log_warning "$tool_name build succeeded but binary not found — may need shell reload"
+    echo "warn" > "$status_dir/$tool_name"
     return 1
 }
 
 install_go_tools() {
-    log_info "Installing Go tools..."
+    log_info "Installing Go tools (up to $MAX_PARALLEL in parallel)..."
 
     if ! command_exists go; then
         log_error "Go not found in PATH. Please install Go first."
         return 1
     fi
 
-    # Re-export explicitly so all subshells spawned by install_go_tool see these
     export GOROOT="${GOROOT:-$GO_INSTALL_DIR}"
     export GOPATH="${GOPATH:-$HOME/go}"
     export GOBIN="${GOBIN:-$GOPATH/bin}"
     export PATH="$PATH:$GOROOT/bin:$GOBIN"
     mkdir -p "$GOBIN"
 
-    # Belt-and-braces: confirm GOROOT is actually valid before burning time
-    # installing dozens of tools that will all fail with the same root cause.
     if [ ! -x "$GOROOT/bin/go" ]; then
         log_error "GOROOT ($GOROOT) does not contain a valid go binary — aborting Go tools install"
         log_error "Try re-running the script; setup_go_environment should repair this on the next pass"
@@ -350,30 +367,44 @@ install_go_tools() {
         ["uncover"]="go install -v github.com/projectdiscovery/uncover/cmd/uncover@latest"
     )
 
-    local installed_count=0
-    local failed_count=0
+    local status_dir
+    status_dir=$(mktemp -d /tmp/go-tools-status.XXXXXX)
 
+    # GOFLAGS=-mod=mod and a shared module cache make concurrent `go install`
+    # invocations safe — the Go toolchain's module cache itself is already
+    # safe for concurrent access (it uses its own lock files internally).
     for tool in "${!go_tools[@]}"; do
-        if install_go_tool "$tool" "${go_tools[$tool]}"; then
-            ((installed_count++))
-        else
-            ((failed_count++))
-        fi
+        pool_wait_for_slot
+        install_go_tool_job "$tool" "${go_tools[$tool]}" "$status_dir" &
     done
+    wait
 
-    log_success "Go tools: $installed_count installed, $failed_count failed"
+    local installed_count=0 failed_count=0 skipped_count=0
+    for f in "$status_dir"/*; do
+        case "$(cat "$f" 2>/dev/null)" in
+            ok)   ((installed_count++)) ;;
+            skip) ((skipped_count++)) ;;
+            *)    ((failed_count++)) ;;
+        esac
+    done
+    rm -rf "$status_dir"
+
+    log_success "Go tools: $installed_count installed, $skipped_count already present, $failed_count failed"
 
     if command_exists gf; then
         log_info "Setting up gf patterns..."
         mkdir -p ~/.gf
-        if git clone --depth 1 https://github.com/tomnomnom/gf.git /tmp/gf-patterns 2>/dev/null; then
-            cp -r /tmp/gf-patterns/examples/* ~/.gf/ 2>/dev/null
+        (
+            git clone --depth 1 https://github.com/tomnomnom/gf.git /tmp/gf-patterns 2>/dev/null &&
+            cp -r /tmp/gf-patterns/examples/* ~/.gf/ 2>/dev/null &&
             log_success "GF base patterns installed"
-        fi
-        if git clone --depth 1 https://github.com/1ndex-g0d/GF-Patterns.git /tmp/gf-extra 2>/dev/null; then
-            cp -r /tmp/gf-extra/*.json ~/.gf/ 2>/dev/null
+        ) &
+        (
+            git clone --depth 1 https://github.com/1ndex-g0d/GF-Patterns.git /tmp/gf-extra 2>/dev/null &&
+            cp -r /tmp/gf-extra/*.json ~/.gf/ 2>/dev/null &&
             log_success "GF extra patterns installed"
-        fi
+        ) &
+        wait
     fi
 }
 
@@ -416,25 +447,7 @@ setup_python_environment() {
     log_success "Python environment ready"
 }
 
-install_python_tool() {
-    local tool=$1
-    log_info "Checking Python package: $tool"
-
-    if pip show "$tool" >/dev/null 2>&1; then
-        log_info "$tool already installed"
-        return 0
-    fi
-
-    log_info "Installing Python package: $tool..."
-    if pip install "$tool" >> "$LOG_FILE" 2>&1; then
-        log_success "Installed Python package: $tool"
-        return 0
-    else
-        log_error "Failed to install Python package: $tool"
-        return 1
-    fi
-}
-
+# ==================== PYTHON TOOLS (PARALLEL) ====================
 install_python_tools() {
     log_info "Installing Python tools..."
 
@@ -457,16 +470,56 @@ install_python_tools() {
         "paramspider"
     )
 
-    local installed_count=0
-    local failed_count=0
-
+    # Single batched pip install instead of N separate pip invocations.
+    # pip resolves the whole set together and reuses its HTTP connection /
+    # wheel cache, which is dramatically faster than looping pip per-package.
+    # First figure out which ones are already installed so we don't even
+    # send those to the resolver.
+    local to_install=()
     for tool in "${python_tools[@]}"; do
-        if install_python_tool "$tool"; then
-            ((installed_count++))
+        if pip show "$tool" >/dev/null 2>&1; then
+            log_info "$tool already installed"
         else
-            ((failed_count++))
+            to_install+=("$tool")
         fi
     done
+
+    local installed_count=$(( ${#python_tools[@]} - ${#to_install[@]} ))
+    local failed_count=0
+
+    if [ "${#to_install[@]}" -gt 0 ]; then
+        log_info "Installing ${#to_install[@]} Python packages in one batch: ${to_install[*]}"
+        if pip install "${to_install[@]}" >> "$LOG_FILE" 2>&1; then
+            for tool in "${to_install[@]}"; do
+                log_success "Installed Python package: $tool"
+            done
+            ((installed_count+=${#to_install[@]}))
+        else
+            # Batch failed (one bad package can sink the whole batch) — fall
+            # back to per-package installs so one failure doesn't block the rest,
+            # but still run them in parallel.
+            log_warning "Batched pip install failed — falling back to parallel per-package installs"
+            local status_dir
+            status_dir=$(mktemp -d /tmp/pip-tools-status.XXXXXX)
+            for tool in "${to_install[@]}"; do
+                pool_wait_for_slot
+                (
+                    if pip install "$tool" >> "$LOG_FILE" 2>&1; then
+                        log_success "Installed Python package: $tool"
+                        echo ok > "$status_dir/$tool"
+                    else
+                        log_error "Failed to install Python package: $tool"
+                        echo fail > "$status_dir/$tool"
+                    fi
+                ) &
+            done
+            wait
+            for f in "$status_dir"/*; do
+                [ "$(cat "$f" 2>/dev/null)" = "ok" ] && ((installed_count++)) || ((failed_count++))
+            done
+            rm -rf "$status_dir"
+        fi
+    fi
 
     install_from_github() {
         local repo=$1
@@ -491,15 +544,14 @@ install_python_tools() {
 
         sudo mkdir -p "$install_path"
 
+        local py_file=""
         if [ -n "$main_script" ] && [ -f "$main_script" ]; then
-            local py_file="$main_script"
+            py_file="$main_script"
         elif [ -f "setup.py" ]; then
             pip install . >> "$LOG_FILE" 2>&1
             log_success "Installed $tool_name via setup.py"
-            cd /tmp || true
             return 0
         else
-            local py_file
             py_file=$(find . -maxdepth 2 -name "${tool_name}.py" -type f | head -1)
             if [ -z "$py_file" ]; then
                 py_file=$(find . -maxdepth 1 -name "*.py" -type f | head -1)
@@ -511,24 +563,25 @@ install_python_tools() {
             sudo chmod +x "$install_path/$tool_name.py"
             local shell_rc
             shell_rc="$(get_shell_rc)"
-            if append_once "$shell_rc" "alias $tool_name='python3 $install_path/$tool_name.py'"; then
-                : # alias added
-            fi
+            append_once "$shell_rc" "alias $tool_name='python3 $install_path/$tool_name.py'" >/dev/null
             log_success "Installed $tool_name"
-            cd /tmp || true
             return 0
         fi
 
         log_error "Could not find a main script for $tool_name"
-        cd /tmp || true
         return 1
     }
+    export -f install_from_github
+    export -f log_info log_success log_warning log_error log_message append_once get_shell_rc
 
-    install_from_github "0xRyuk/crtsh"               "crtsh"        "/opt/crtsh"                                "crtsh.py"
-    install_from_github "m4ll0k/SecretFinder"         "secretfinder" "$INSTALL_DIR/python/secretfinder"         "SecretFinder.py"
-    install_from_github "GerbenJavado/LinkFinder"     "linkfinder"   "$INSTALL_DIR/python/linkfinder"           "linkfinder.py"
-    install_from_github "WangYihang/GitHacker"        "githacker"    "$INSTALL_DIR/python/GitHacker"            "GitHacker.py"
-    install_from_github "s0md3v/uro"                  "uro"          "$INSTALL_DIR/python/uro"                  ""
+    # Run the GitHub-based python tool installs in parallel — each clones into
+    # its own /tmp/<tool_name> dir so there's no path collision between jobs.
+    (install_from_github "0xRyuk/crtsh"           "crtsh"        "/opt/crtsh"                        "crtsh.py")        &
+    (install_from_github "m4ll0k/SecretFinder"    "secretfinder" "$INSTALL_DIR/python/secretfinder"  "SecretFinder.py") &
+    (install_from_github "GerbenJavado/LinkFinder" "linkfinder"  "$INSTALL_DIR/python/linkfinder"    "linkfinder.py")   &
+    (install_from_github "WangYihang/GitHacker"   "githacker"    "$INSTALL_DIR/python/GitHacker"     "GitHacker.py")    &
+    (install_from_github "s0md3v/uro"             "uro"          "$INSTALL_DIR/python/uro"           "")                &
+    wait
 
     deactivate
 
@@ -536,10 +589,21 @@ install_python_tools() {
 }
 
 # ==================== SYSTEM TOOLS ====================
+# apt itself doesn't meaningfully parallelize across separate invocations
+# (it serializes on the dpkg lock anyway), so the real win here is replacing
+# N sequential `apt install` calls (each with its own dependency resolution
+# and lock acquisition) with a single batched call for everything that's
+# actually missing. We also enable apt's parallel package *download* via
+# acquire::queue-mode, which does help on multi-package transactions.
 install_system_tools() {
     log_info "Installing system tools..."
 
     sudo apt update -qq
+
+    # Allow apt to download multiple packages concurrently (doesn't affect
+    # the dpkg install step itself, but cuts fetch time noticeably).
+    echo 'Acquire::Queue-Mode "host"; Acquire::Retries "3";' | \
+        sudo tee /etc/apt/apt.conf.d/99parallel-fetch >/dev/null 2>&1
 
     local essential_tools=(
         "curl" "wget" "git" "jq" "unzip" "build-essential"
@@ -556,37 +620,54 @@ install_system_tools() {
         "proxychains4"
     )
 
-    local installed_count=0
-    local failed_count=0
-
+    local to_install=()
     for tool in "${essential_tools[@]}"; do
         log_info "Checking: $tool"
         if is_installed "$tool" "system"; then
             log_info "$tool already installed"
-            continue
-        fi
-
-        log_info "Installing $tool..."
-        if sudo apt install -y "$tool" >> "$LOG_FILE" 2>&1; then
-            log_success "Installed $tool"
-            ((installed_count++))
         else
-            log_warning "Failed to install $tool (may not exist in repos)"
-            ((failed_count++))
+            to_install+=("$tool")
         fi
     done
+
+    local installed_count=0
+    local failed_count=0
+
+    if [ "${#to_install[@]}" -gt 0 ]; then
+        log_info "Installing ${#to_install[@]} packages in a single apt transaction: ${to_install[*]}"
+        if sudo apt install -y "${to_install[@]}" >> "$LOG_FILE" 2>&1; then
+            for tool in "${to_install[@]}"; do
+                log_success "Installed $tool"
+            done
+            installed_count=${#to_install[@]}
+        else
+            # If the batch fails (e.g. one package name doesn't exist in repos,
+            # such as chromium-browser on some distros), fall back to
+            # installing each individually so one bad name doesn't block the rest.
+            log_warning "Batched apt install hit an error — retrying packages individually"
+            for tool in "${to_install[@]}"; do
+                if sudo apt install -y "$tool" >> "$LOG_FILE" 2>&1; then
+                    log_success "Installed $tool"
+                    ((installed_count++))
+                else
+                    log_warning "Failed to install $tool (may not exist in repos)"
+                    ((failed_count++))
+                fi
+            done
+        fi
+    fi
 
     log_success "System tools: $installed_count installed, $failed_count failed"
 }
 
-# ==================== WORDLISTS ====================
+# ==================== WORDLISTS (PARALLEL DOWNLOADS) ====================
 
-# Search for an existing copy of a file anywhere on disk before downloading
 find_existing_file() {
     local filename=$1
     find /usr/share/wordlists /usr/share /opt /home /root /data /mnt \
         -maxdepth 6 -name "$filename" -type f 2>/dev/null | head -1
 }
+export -f find_existing_file
 
 setup_wordlists() {
     log_info "Setting up wordlists..."
@@ -617,76 +698,86 @@ setup_wordlists() {
         ["resolvers.txt"]="https://raw.githubusercontent.com/projectdiscovery/dnsx/main/scripts/resolvers.txt"
     )
 
+    # Fire off all wordlist downloads/symlinks in parallel (bounded), each
+    # independent of the others, then wait for the whole batch.
     for filename in "${!url_wordlists[@]}"; do
-        # Already in target dir (real file or symlink)
         if [ -f "$WORDLISTS_DIR/$filename" ]; then
             log_info "Wordlist exists: $filename"
             continue
         fi
 
-        # Search system for an existing copy — symlink instead of re-downloading
-        local existing
-        existing=$(find_existing_file "$filename")
-        if [ -n "$existing" ]; then
-            ln -sf "$existing" "$WORDLISTS_DIR/$filename"
-            log_success "Symlinked existing $filename → $existing"
-            continue
-        fi
+        pool_wait_for_slot
+        (
+            local existing
+            existing=$(find_existing_file "$filename")
+            if [ -n "$existing" ]; then
+                ln -sf "$existing" "$WORDLISTS_DIR/$filename"
+                log_success "Symlinked existing $filename → $existing"
+                exit 0
+            fi
 
-        # Not found anywhere — download
-        log_info "Downloading: $filename"
-        if wget -q "${url_wordlists[$filename]}" -O "$WORDLISTS_DIR/$filename"; then
-            log_success "Downloaded $filename"
-        else
-            log_warning "Failed to download $filename"
-            rm -f "$WORDLISTS_DIR/$filename"
-        fi
+            log_info "Downloading: $filename"
+            if wget -q "${url_wordlists[$filename]}" -O "$WORDLISTS_DIR/$filename"; then
+                log_success "Downloaded $filename"
+            else
+                log_warning "Failed to download $filename"
+                rm -f "$WORDLISTS_DIR/$filename"
+            fi
+        ) &
     done
 
-    # SecLists
+    # SecLists (large clone) and Assetnote wordlists run concurrently with
+    # the small downloads above rather than waiting for them first.
     if [ ! -d "$WORDLISTS_DIR/SecLists" ]; then
-        local existing_seclists
-        existing_seclists=$(find /usr/share/wordlists /opt /home /root -maxdepth 4 \
-            -name "SecLists" -type d 2>/dev/null | head -1)
-        if [ -n "$existing_seclists" ]; then
-            ln -sf "$existing_seclists" "$WORDLISTS_DIR/SecLists"
-            log_success "Symlinked existing SecLists → $existing_seclists"
-        else
-            log_info "Cloning SecLists (shallow)..."
-            git clone --depth 1 https://github.com/danielmiessler/SecLists.git \
-                "$WORDLISTS_DIR/SecLists" >> "$LOG_FILE" 2>&1 && \
-                log_success "Cloned SecLists" || log_warning "SecLists clone failed"
-        fi
+        pool_wait_for_slot
+        (
+            local existing_seclists
+            existing_seclists=$(find /usr/share/wordlists /opt /home /root -maxdepth 4 \
+                -name "SecLists" -type d 2>/dev/null | head -1)
+            if [ -n "$existing_seclists" ]; then
+                ln -sf "$existing_seclists" "$WORDLISTS_DIR/SecLists"
+                log_success "Symlinked existing SecLists → $existing_seclists"
+            else
+                log_info "Cloning SecLists (shallow)..."
+                git clone --depth 1 https://github.com/danielmiessler/SecLists.git \
+                    "$WORDLISTS_DIR/SecLists" >> "$LOG_FILE" 2>&1 && \
+                    log_success "Cloned SecLists" || log_warning "SecLists clone failed"
+            fi
+        ) &
     else
         log_info "SecLists already present"
     fi
 
-    # Assetnote wordlists
     if [ ! -d "$WORDLISTS_DIR/assetnote" ]; then
-        mkdir -p "$WORDLISTS_DIR/assetnote"
+        pool_wait_for_slot
+        (
+            mkdir -p "$WORDLISTS_DIR/assetnote"
 
-        for wl_name in "aspx.txt" "apiroutes.txt"; do
-            local existing_wl
-            existing_wl=$(find_existing_file "$wl_name")
-            if [ -n "$existing_wl" ]; then
-                ln -sf "$existing_wl" "$WORDLISTS_DIR/assetnote/$wl_name"
-                log_success "Symlinked existing $wl_name → $existing_wl"
+            for wl_name in "aspx.txt" "apiroutes.txt"; do
+                existing_wl=$(find_existing_file "$wl_name")
+                if [ -n "$existing_wl" ]; then
+                    ln -sf "$existing_wl" "$WORDLISTS_DIR/assetnote/$wl_name"
+                    log_success "Symlinked existing $wl_name → $existing_wl"
+                fi
+            done
+
+            if [ ! -f "$WORDLISTS_DIR/assetnote/aspx.txt" ]; then
+                wget -q "https://wordlists-cdn.assetnote.io/data/manual/aspx.txt" \
+                    -O "$WORDLISTS_DIR/assetnote/aspx.txt" && \
+                    log_success "Downloaded aspx.txt"
             fi
-        done
 
-        [ ! -f "$WORDLISTS_DIR/assetnote/aspx.txt" ] && \
-            wget -q "https://wordlists-cdn.assetnote.io/data/manual/aspx.txt" \
-                -O "$WORDLISTS_DIR/assetnote/aspx.txt" && \
-            log_success "Downloaded aspx.txt"
-
-        [ ! -f "$WORDLISTS_DIR/assetnote/apiroutes.txt" ] && \
-            wget -q "https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2024.01.28.txt" \
-                -O "$WORDLISTS_DIR/assetnote/apiroutes.txt" && \
-            log_success "Downloaded apiroutes.txt"
+            if [ ! -f "$WORDLISTS_DIR/assetnote/apiroutes.txt" ]; then
+                wget -q "https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2024.01.28.txt" \
+                    -O "$WORDLISTS_DIR/assetnote/apiroutes.txt" && \
+                    log_success "Downloaded apiroutes.txt"
+            fi
+        ) &
     else
         log_info "Assetnote wordlists already present"
     fi
 
+    wait
     log_success "Wordlists setup complete"
 }
 
@@ -696,13 +787,12 @@ post_install_setup() {
 
     sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 1 2>/dev/null || true
 
-    # Build massdns if puredns is present and massdns is missing
     if command_exists puredns && ! command_exists massdns; then
         log_info "Building massdns (required by puredns)..."
         cd /tmp || exit 1
         rm -rf massdns
         if git clone --depth 1 https://github.com/blechschmidt/massdns.git >> "$LOG_FILE" 2>&1; then
-            cd massdns && make >> "$LOG_FILE" 2>&1
+            cd massdns && make -j"$MAX_PARALLEL" >> "$LOG_FILE" 2>&1
             sudo cp bin/massdns /usr/local/bin/
             log_success "Installed massdns"
         else
@@ -710,19 +800,16 @@ post_install_setup() {
         fi
     fi
 
-    # Re-export Go env explicitly (source ~/.bashrc is a no-op in non-interactive subshell)
     export GOROOT="${GOROOT:-$GO_INSTALL_DIR}"
     export GOPATH="${GOPATH:-$HOME/go}"
     export GOBIN="${GOBIN:-$GOPATH/bin}"
     export PATH="$PATH:$GOROOT/bin:$GOBIN:$INSTALL_DIR/python/venv/bin"
 
-    # Update nuclei templates
     if command_exists nuclei; then
         log_info "Updating nuclei templates..."
         nuclei -ut >> "$LOG_FILE" 2>&1 && log_success "Nuclei templates updated"
     fi
 
-    # Verify key installations
     log_info "Verifying key installations..."
 
     local key_tools=("nmap" "go" "python3" "git" "subfinder" "httpx" "nuclei" "ffuf" "dalfox" "puredns")
@@ -751,6 +838,7 @@ main() {
     ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀${NL}"
 
     echo -e "Log file: ${WH}$LOG_FILE${NL}"
+    echo -e "Parallel jobs: ${WH}$MAX_PARALLEL${NL}"
     echo -e "Made with ${RED}❤${NL} by ${GR}@sudosuraj${NL}"
     echo -e "${BL}===============================================${NL}"
 
@@ -761,6 +849,7 @@ main() {
     echo "Start time: $(date)"        >> "$LOG_FILE"
     echo "User: $(whoami)"            >> "$LOG_FILE"
     echo "System: $(uname -a)"        >> "$LOG_FILE"
+    echo "Max parallel jobs: $MAX_PARALLEL" >> "$LOG_FILE"
 
     setup_directories
     install_system_tools
@@ -770,6 +859,8 @@ main() {
     install_python_tools
     setup_wordlists
     post_install_setup
+
+    [ -n "$SUDO_KEEPALIVE_PID" ] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
 
     local shell_rc
     shell_rc="$(get_shell_rc)"
@@ -791,6 +882,6 @@ main() {
     echo -e "\n${BL}Happy Hunting! 🔍${NL}"
 }
 
-trap 'log_error "Script interrupted at line $LINENO"; exit 1' INT TERM
+trap 'log_error "Script interrupted at line $LINENO"; [ -n "$SUDO_KEEPALIVE_PID" ] && kill "$SUDO_KEEPALIVE_PID" 2>/dev/null; exit 1' INT TERM
 
 main "$@"
