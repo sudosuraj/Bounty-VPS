@@ -2,7 +2,7 @@
 
 # ==================== CONFIGURATION ====================
 SCRIPT_NAME="bounty-vps-setup"
-SCRIPT_VERSION="2.2"
+SCRIPT_VERSION="2.3"
 LOG_FILE="/tmp/$SCRIPT_NAME-$(date +%Y%m%d-%H%M%S).log"
 INSTALL_DIR="$HOME/tools"
 WORDLISTS_DIR="$HOME/wordlists"
@@ -88,6 +88,18 @@ get_shell_rc() {
     esac
 }
 
+# Append a line to shell_rc only if an equivalent line isn't already present.
+# Uses fixed-string matching so special characters (like $ in PATH exports) are safe.
+append_once() {
+    local file=$1
+    local line=$2
+    if ! grep -qF -- "$line" "$file" 2>/dev/null; then
+        echo "$line" >> "$file"
+        return 0
+    fi
+    return 1
+}
+
 setup_directories() {
     log_info "Setting up directories..."
 
@@ -104,28 +116,53 @@ setup_directories() {
     shell_rc="$(get_shell_rc)"
     touch "$shell_rc"
 
-    if [[ ":$PATH:" != *":$INSTALL_DIR/bin:"* ]]; then
-        echo "export PATH=\"\$PATH:$INSTALL_DIR/bin\"" >> "$shell_rc"
-        export PATH="$PATH:$INSTALL_DIR/bin"
-        log_success "Added $INSTALL_DIR/bin to PATH"
+    # IMPORTANT: check the shell_rc FILE for an existing entry, not the live $PATH.
+    # Checking $PATH was the cause of duplicate entries on every run, since a
+    # non-interactive script invocation doesn't necessarily inherit a PATH that
+    # already includes lines appended to ~/.zshrc in a previous run.
+    if append_once "$shell_rc" "export PATH=\"\$PATH:$INSTALL_DIR/bin\""; then
+        log_success "Added $INSTALL_DIR/bin to PATH in $shell_rc"
+    else
+        log_info "$INSTALL_DIR/bin already present in $shell_rc"
     fi
+
+    export PATH="$PATH:$INSTALL_DIR/bin"
 }
 
 # ==================== GO SETUP ====================
 setup_go_environment() {
     log_info "Setting up Go environment..."
 
-    if command_exists go; then
-        local current_go_version
-        current_go_version=$(go version | awk '{print $3}')
-        log_info "Go already installed: $current_go_version"
+    local detected_goroot=""
 
-        if [[ "$current_go_version" == *"$GO_VERSION"* ]]; then
-            log_success "Correct Go version already installed"
+    if command_exists go; then
+        # Make sure the go binary actually works before trusting it — a partial
+        # or broken install (e.g. binary present but GOROOT contents missing)
+        # is what typically causes "GOROOT verification failed" style errors
+        # later when installing tools.
+        if go version >/dev/null 2>&1; then
+            detected_goroot=$(go env GOROOT 2>/dev/null)
+            local current_go_version
+            current_go_version=$(go version | awk '{print $3}')
+            log_info "Go already installed: $current_go_version (GOROOT: $detected_goroot)"
+
+            if [[ "$current_go_version" == *"$GO_VERSION"* ]]; then
+                log_success "Correct Go version already installed"
+            else
+                log_warning "Different Go version found ($current_go_version). Continuing with existing version."
+            fi
+
+            # Sanity check: does the reported GOROOT actually exist on disk?
+            if [ -z "$detected_goroot" ] || [ ! -d "$detected_goroot" ] || [ ! -x "$detected_goroot/bin/go" ]; then
+                log_warning "Detected GOROOT ('$detected_goroot') looks broken or missing — will reinstall Go"
+                detected_goroot=""
+            fi
         else
-            log_warning "Different Go version found ($current_go_version). Continuing with existing version."
+            log_warning "A 'go' binary is on PATH but is not functional — will reinstall Go"
         fi
-    else
+    fi
+
+    if [ -z "$detected_goroot" ]; then
         log_info "Installing Go $GO_VERSION..."
         cd /tmp || exit 1
 
@@ -138,6 +175,11 @@ setup_go_environment() {
             fi
         fi
 
+        # Wipe any stale/broken install at our target path before extracting,
+        # otherwise leftover files from a previous failed run can produce a
+        # Frankenstein install with a mismatched GOROOT.
+        sudo rm -rf "$GO_INSTALL_DIR"
+
         if ! sudo tar -C /usr/local -xzf "$go_archive"; then
             log_error "Failed to extract Go"
             rm -f "$go_archive"
@@ -145,7 +187,13 @@ setup_go_environment() {
         fi
 
         rm -f "$go_archive"
+        detected_goroot="$GO_INSTALL_DIR"
     fi
+
+    # From here on, GO_INSTALL_DIR always reflects the GOROOT we're actually
+    # going to use — whether that's a pre-existing install we validated, or
+    # the one we just installed fresh.
+    GO_INSTALL_DIR="$detected_goroot"
 
     local go_env
     go_env="
@@ -160,11 +208,22 @@ export PATH=\"\$PATH:\$GOROOT/bin:\$GOBIN\"
     shell_rc="$(get_shell_rc)"
     touch "$shell_rc"
 
-    if ! grep -q "GOROOT=" "$shell_rc" 2>/dev/null; then
+    if grep -q "# Go Environment" "$shell_rc" 2>/dev/null; then
+        # A Go env block already exists. If GOROOT changed (e.g. we detected a
+        # different install path than last time), replace the whole block
+        # instead of appending a second, conflicting one.
+        if grep -qF "GOROOT=\"$GO_INSTALL_DIR\"" "$shell_rc" 2>/dev/null; then
+            log_info "Go environment already correctly configured in $shell_rc"
+        else
+            log_warning "Go environment block in $shell_rc is stale — refreshing it"
+            # Remove the old block (from the marker comment through the PATH line)
+            sed -i '/# Go Environment/,/^export PATH="\$PATH:\$GOROOT\/bin:\$GOBIN"$/d' "$shell_rc"
+            echo "$go_env" >> "$shell_rc"
+            log_success "Refreshed Go environment in $shell_rc"
+        fi
+    else
         echo "$go_env" >> "$shell_rc"
         log_success "Added Go environment to $shell_rc"
-    else
-        log_info "Go environment already present in $shell_rc"
     fi
 
     export GOROOT="$GO_INSTALL_DIR"
@@ -175,7 +234,15 @@ export PATH=\"\$PATH:\$GOROOT/bin:\$GOBIN\"
     mkdir -p "$GOPATH"/{src,bin,pkg}
 
     if command_exists go; then
-        log_success "Go ready: $(go version)"
+        # Final sanity check: does `go env GOROOT` agree with what we exported?
+        # If not (e.g. a different go binary earlier in PATH), trust go itself.
+        local verify_goroot
+        verify_goroot=$(go env GOROOT 2>/dev/null)
+        if [ -n "$verify_goroot" ] && [ "$verify_goroot" != "$GOROOT" ]; then
+            log_warning "GOROOT mismatch detected (shell=$GOROOT, go reports=$verify_goroot) — using go's reported value"
+            export GOROOT="$verify_goroot"
+        fi
+        log_success "Go ready: $(go version) [GOROOT=$GOROOT]"
         return 0
     else
         log_error "Go installation failed"
@@ -240,6 +307,14 @@ install_go_tools() {
     export GOBIN="${GOBIN:-$GOPATH/bin}"
     export PATH="$PATH:$GOROOT/bin:$GOBIN"
     mkdir -p "$GOBIN"
+
+    # Belt-and-braces: confirm GOROOT is actually valid before burning time
+    # installing dozens of tools that will all fail with the same root cause.
+    if [ ! -x "$GOROOT/bin/go" ]; then
+        log_error "GOROOT ($GOROOT) does not contain a valid go binary — aborting Go tools install"
+        log_error "Try re-running the script; setup_go_environment should repair this on the next pass"
+        return 1
+    fi
 
     declare -A go_tools=(
         ["subfinder"]="go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
@@ -326,14 +401,16 @@ setup_python_environment() {
     shell_rc="$(get_shell_rc)"
     touch "$shell_rc"
 
-    if ! grep -q "$py_venv/bin" "$shell_rc" 2>/dev/null; then
-        echo "export PATH=\"$py_venv/bin:\$PATH\"" >> "$shell_rc"
+    if append_once "$shell_rc" "export PATH=\"$py_venv/bin:\$PATH\""; then
         log_success "Added Python venv to PATH in $shell_rc"
+    else
+        log_info "Python venv PATH entry already present in $shell_rc"
     fi
 
-    if ! grep -q "alias bounty-venv" "$shell_rc" 2>/dev/null; then
-        echo "alias bounty-venv='source $py_venv/bin/activate'" >> "$shell_rc"
+    if append_once "$shell_rc" "alias bounty-venv='source $py_venv/bin/activate'"; then
         log_success "Created bounty-venv alias in $shell_rc"
+    else
+        log_info "bounty-venv alias already present in $shell_rc"
     fi
 
     log_success "Python environment ready"
@@ -434,8 +511,8 @@ install_python_tools() {
             sudo chmod +x "$install_path/$tool_name.py"
             local shell_rc
             shell_rc="$(get_shell_rc)"
-            if ! grep -q "alias $tool_name=" "$shell_rc"; then
-                echo "alias $tool_name='python3 $install_path/$tool_name.py'" >> "$shell_rc"
+            if append_once "$shell_rc" "alias $tool_name='python3 $install_path/$tool_name.py'"; then
+                : # alias added
             fi
             log_success "Installed $tool_name"
             cd /tmp || true
